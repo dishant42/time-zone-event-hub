@@ -104,12 +104,20 @@ const Index = () => {
               <h1 className="text-2xl font-bold text-gray-900">EventBook</h1>
               <p className="text-gray-600">Book your spot at amazing events</p>
             </div>
-            <Link to="/create">
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Event
-              </Button>
-            </Link>
+            <div className="flex gap-3">
+              <Link to="/my-bookings">
+                <Button variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50">
+                  <Users className="h-4 w-4 mr-2" />
+                  My Bookings
+                </Button>
+              </Link>
+              <Link to="/create">
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Event
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
