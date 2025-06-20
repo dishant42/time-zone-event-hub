@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { formatDateTime, getUserTimezone } from "@/utils/timeUtils";
+import TimezoneIndicator from "@/components/TimezoneIndicator";
 
 interface TimeSlot {
   id: string;
@@ -252,14 +254,15 @@ const EventDetails = () => {
         <Card className="mb-8 border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">Available Time Slots</CardTitle>
-            <CardDescription>
-              Times shown in your local timezone ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+            <CardDescription className="flex items-center gap-2">
+              Times shown in your local timezone
+              <TimezoneIndicator />
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">
               {event.timeSlots.map((slot) => {
-                const { full, time, timezone } = formatDateTime(slot.dateTime);
+                const formatted = formatDateTime(slot.dateTime);
                 const isAvailable = slot.currentBookings < slot.maxBookings;
                 const isSelected = selectedSlot === slot.id;
                 
@@ -279,10 +282,10 @@ const EventDetails = () => {
                       <div>
                         <div className="flex items-center mb-1">
                           <Clock className="h-4 w-4 mr-2 text-gray-500" />
-                          <span className="font-semibold">{full}</span>
+                          <span className="font-semibold">{formatted.full}</span>
                         </div>
                         <div className="text-lg font-bold text-blue-600 mb-1">
-                          {time}
+                          {formatted.time}
                         </div>
                       </div>
                       <div className="text-right">

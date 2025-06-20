@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Mail, Calendar, Clock, User, Search } from "lucide-react";
@@ -7,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { formatDateTime, isUpcomingDateTime } from "@/utils/timeUtils";
 
 interface Booking {
   name: string;
@@ -155,12 +155,12 @@ const MyBookings = () => {
     }, 800);
   };
 
-  const isUpcoming = (dateTime: string) => {
+  const isUpcomingDateTime = (dateTime: string) => {
     return new Date(dateTime) > new Date();
   };
 
-  const upcomingBookings = userBookings.filter(booking => isUpcoming(booking.slotDateTime));
-  const pastBookings = userBookings.filter(booking => !isUpcoming(booking.slotDateTime));
+  const upcomingBookings = userBookings.filter(booking => isUpcomingDateTime(booking.slotDateTime));
+  const pastBookings = userBookings.filter(booking => !isUpcomingDateTime(booking.slotDateTime));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -261,7 +261,7 @@ const MyBookings = () => {
                     </h3>
                     <div className="grid gap-4">
                       {upcomingBookings.map((booking, index) => {
-                        const { full, time } = formatDateTime(booking.slotDateTime);
+                        const formatted = formatDateTime(booking.slotDateTime);
                         return (
                           <Card key={index} className="hover:shadow-lg transition-shadow duration-300 border-0 shadow-md border-l-4 border-l-green-500">
                             <CardHeader className="pb-3">
@@ -279,7 +279,7 @@ const MyBookings = () => {
                               <div className="space-y-3">
                                 <div className="flex items-center text-gray-700">
                                   <Clock className="h-4 w-4 mr-2" />
-                                  <span><strong>{full}</strong> at <strong>{time}</strong></span>
+                                  <span><strong>{formatted.full}</strong> at <strong>{formatted.time}</strong></span>
                                 </div>
                                 <div className="flex items-center text-gray-700">
                                   <User className="h-4 w-4 mr-2" />
@@ -308,7 +308,7 @@ const MyBookings = () => {
                     </h3>
                     <div className="grid gap-4">
                       {pastBookings.map((booking, index) => {
-                        const { full, time } = formatDateTime(booking.slotDateTime);
+                        const formatted = formatDateTime(booking.slotDateTime);
                         return (
                           <Card key={index} className="hover:shadow-lg transition-shadow duration-300 border-0 shadow-md border-l-4 border-l-gray-400">
                             <CardHeader className="pb-3">
@@ -326,7 +326,7 @@ const MyBookings = () => {
                               <div className="space-y-3">
                                 <div className="flex items-center text-gray-600">
                                   <Clock className="h-4 w-4 mr-2" />
-                                  <span>{full} at {time}</span>
+                                  <span>{formatted.full} at {formatted.time}</span>
                                 </div>
                                 <div className="flex items-center text-gray-600">
                                   <User className="h-4 w-4 mr-2" />

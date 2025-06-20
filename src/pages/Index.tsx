@@ -1,10 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Clock, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDateTime } from "@/utils/timeUtils";
 
 interface TimeSlot {
   id: string;
@@ -58,22 +58,6 @@ const Index = () => {
       setLoading(false);
     }, 1000);
   }, []);
-
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return {
-      date: date.toLocaleDateString('en-US', { 
-        weekday: 'short', 
-        month: 'short', 
-        day: 'numeric' 
-      }),
-      time: date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      })
-    };
-  };
 
   const getAvailableSlots = (timeSlots: TimeSlot[]) => {
     return timeSlots.filter(slot => slot.currentBookings < slot.maxBookings).length;
@@ -166,13 +150,13 @@ const Index = () => {
                     
                     <div className="space-y-2 mb-4">
                       {event.timeSlots.slice(0, 2).map((slot) => {
-                        const { date, time } = formatDateTime(slot.dateTime);
+                        const formatted = formatDateTime(slot.dateTime);
                         const isAvailable = slot.currentBookings < slot.maxBookings;
                         return (
                           <div key={slot.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center text-gray-700">
                               <Clock className="h-4 w-4 mr-2" />
-                              <span>{date} at {time}</span>
+                              <span>{formatted.short}</span>
                             </div>
                             <Badge variant={isAvailable ? "default" : "destructive"} className="text-xs">
                               {isAvailable ? "Available" : "Full"}

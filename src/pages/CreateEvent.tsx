@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Calendar, Clock } from "lucide-react";
@@ -8,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { 
+  getCurrentDateString, 
+  getCurrentTimeString, 
+  convertLocalInputsToUtc, 
+  validateDateTime,
+  formatDateTime 
+} from "@/utils/timeUtils";
 
 interface TimeSlot {
   id: string;
@@ -77,8 +83,8 @@ const CreateEvent = () => {
     }
 
     const now = new Date();
-    const currentDateStr = now.toISOString().split('T')[0];
-    const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    const currentDateStr = getCurrentDateString();
+    const currentTimeStr = getCurrentTimeString();
 
     for (const slot of timeSlots) {
       if (!slot.date || !slot.time) {
@@ -108,13 +114,12 @@ const CreateEvent = () => {
 
     setIsCreating(true);
 
-    // Convert time slots to UTC format
+    // Convert time slots to UTC format using utility
     const formattedTimeSlots = timeSlots.map(slot => {
-      const dateTimeString = `${slot.date}T${slot.time}:00`;
-      const localDate = new Date(dateTimeString);
+      const utcDateTime = convertLocalInputsToUtc(slot.date, slot.time);
       return {
         id: slot.id,
-        dateTime: localDate.toISOString(),
+        dateTime: utcDateTime,
         maxBookings: slot.maxBookings,
         currentBookings: 0,
         bookings: []
@@ -231,7 +236,7 @@ const CreateEvent = () => {
                       <Input
                         id={`date-${slot.id}`}
                         type="date"
-                        min={getTodayDate()}
+                        min={getCurrentDateString()}
                         value={slot.date}
                         onChange={(e) => updateTimeSlot(slot.id, 'date', e.target.value)}
                         required
@@ -269,16 +274,7 @@ const CreateEvent = () => {
                       <div className="flex items-center text-sm text-gray-600">
                         <Clock className="h-4 w-4 mr-2" />
                         <span>
-                          Preview: {new Date(`${slot.date}T${slot.time}`).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })} at {new Date(`${slot.date}T${slot.time}`).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                          })}
+                          Preview: {formatDateTime(`${slot.date}T${slot.time}`).full} at {formatDateTime(`${slot.date}T${slot.time}`).time}
                         </span>
                       </div>
                     </div>
