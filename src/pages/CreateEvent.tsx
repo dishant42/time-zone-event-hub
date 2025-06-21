@@ -10,9 +10,9 @@ import { toast } from "sonner";
 import { 
   getCurrentDateString, 
   getCurrentTimeString, 
-  convertLocalInputsToUtc, 
-  validateDateTime,
-  formatDateTime 
+  convertLocalInputsToUtc,
+  formatUtcInLocalTimezone,
+  isPastDateTime
 } from "@/utils/timeUtils";
 
 interface TimeSlot {
@@ -56,56 +56,47 @@ const CreateEvent = () => {
     ));
   };
 
-  const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
-  const getCurrentTime = () => {
-    const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-
   const validateForm = () => {
-    if (!eventForm.title.trim()) {
-      toast.error("Event title is required");
-      return false;
-    }
-    if (!eventForm.description.trim()) {
-      toast.error("Event description is required");
-      return false;
-    }
-    if (!eventForm.createdBy.trim()) {
-      toast.error("Creator name is required");
-      return false;
-    }
+  if (!eventForm.title.trim()) {
+    toast.error("Event title is required");
+    return false;
+  }
+  if (!eventForm.description.trim()) {
+    toast.error("Event description is required");
+    return false;
+  }
+  if (!eventForm.createdBy.trim()) {
+    toast.error("Creator name is required");
+    return false;
+  }
 
-    const now = new Date();
-    const currentDateStr = getCurrentDateString();
-    const currentTimeStr = getCurrentTimeString();
-
-    for (const slot of timeSlots) {
-      if (!slot.date || !slot.time) {
-        toast.error("All time slots must have a date and time");
-        return false;
-      }
+  for (const slot of timeSlots) {
+    if (!slot.date || !slot.time) {
+      toast.error("All time slots must have a date and time");
+      return false;
+    }
+    
+    try {
+      // Convert user's local input to UTC and validate
+      const slotUtc = convertLocalInputsToUtc(slot.date, slot.time);
       
-      // Check if date/time is in the future
-      if (slot.date < currentDateStr || (slot.date === currentDateStr && slot.time <= currentTimeStr)) {
+      if (isPastDateTime(slotUtc)) {
         toast.error("All time slots must be in the future");
         return false;
       }
-
-      if (slot.maxBookings < 1 || slot.maxBookings > 100) {
-        toast.error("Max bookings must be between 1 and 100");
-        return false;
-      }
+    } catch (error) {
+      toast.error("Invalid date/time format in time slots");
+      return false;
     }
 
-    return true;
-  };
+    if (slot.maxBookings < 1 || slot.maxBookings > 100) {
+      toast.error("Max bookings must be between 1 and 100");
+      return false;
+    }
+  }
+
+  return true;
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,8 +122,7 @@ const CreateEvent = () => {
       });
       if (!response.ok) {
         const errorData = await response.json();
-        console.log(errorData); // <--- Add this line to see the error details
-
+        console.log(errorData);
         throw new Error(errorData.error || "Failed to create event");
       }
       toast.success("Event created successfully!");
@@ -141,6 +131,19 @@ const CreateEvent = () => {
     } catch (err: any) {
       toast.error(err.message || "Error creating event");
       setIsCreating(false);
+    }
+  };
+
+  // Helper function to show preview of selected date/time
+  const getTimePreview = (date: string, time: string) => {
+    if (!date || !time) return null;
+    try {
+      // Create a temporary UTC string for preview
+      const tempUtc = convertLocalInputsToUtc(date, time);
+      const formatted = formatUtcInLocalTimezone(tempUtc);
+      return `${formatted.full} at ${formatted.time}`;
+    } catch {
+      return null;
     }
   };
 
@@ -279,7 +282,7 @@ const CreateEvent = () => {
                       <div className="flex items-center text-sm text-gray-600">
                         <Clock className="h-4 w-4 mr-2" />
                         <span>
-                          Preview: {formatDateTime(`${slot.date}T${slot.time}`).full} at {formatDateTime(`${slot.date}T${slot.time}`).time}
+                          Preview: {getTimePreview(slot.date, slot.time)}
                         </span>
                       </div>
                     </div>

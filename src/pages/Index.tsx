@@ -4,7 +4,7 @@ import { Calendar, Clock, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDateTime } from "@/utils/timeUtils";
+import { formatUtcInLocalTimezone, isPastDateTime } from "@/utils/timeUtils";
 
 interface TimeSlot {
   id: string;
@@ -40,7 +40,7 @@ const Index = () => {
           id: event.id,
           title: event.title,
           description: event.description,
-          createdBy: event.createdBy, // fallback if missing
+          createdBy: event.createdBy,
           timeSlots: (event.slots || []).map((slot: any) => ({
             id: slot.id,
             dateTime: slot.dateTime,
@@ -60,16 +60,23 @@ const Index = () => {
   }, []);
 
   const getAvailableSlots = (timeSlots: TimeSlot[]) => {
-     const now = new Date();
-      return timeSlots.filter(slot =>
-        slot.currentBookings < slot.maxBookings &&
-        new Date(slot.dateTime) > now
+    return timeSlots.filter(slot =>
+      slot.currentBookings < slot.maxBookings &&
+      !isPastDateTime(slot.dateTime)
     ).length;
   };
 
   const getTotalSlots = (timeSlots: TimeSlot[]) => {
     return timeSlots.length;
   };
+
+  // Filter events that have at least one future time slot
+  const hasFutureSlots = (timeSlots: TimeSlot[]) => {
+    return timeSlots.some(slot => !isPastDateTime(slot.dateTime));
+  };
+
+  // Filter events to only show those with future time slots
+  const upcomingEvents = events.filter(event => hasFutureSlots(event.timeSlots));
 
   if (loading) {
     return (
@@ -91,6 +98,7 @@ const Index = () => {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -120,10 +128,10 @@ const Index = () => {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {events.length === 0 ? (
+        {upcomingEvents.length === 0 ? (
           <div className="text-center py-16">
             <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">No events yet</h2>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-2">No upcoming events</h2>
             <p className="text-gray-600 mb-6">Be the first to create an event!</p>
             <Link to="/create">
               <Button className="bg-blue-600 hover:bg-blue-700">
@@ -140,7 +148,7 @@ const Index = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map((event) => (
+              {upcomingEvents.map((event) => (
                 <Card key={event.id} className="hover:shadow-lg transition-shadow duration-300 border-0 shadow-md">
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start mb-2">
@@ -162,24 +170,27 @@ const Index = () => {
                     </CardDescription>
                     
                     <div className="space-y-2 mb-4">
-                      {event.timeSlots.slice(0, 2).map((slot) => {
-                        const formatted = formatDateTime(slot.dateTime);
-                        const isAvailable = slot.currentBookings < slot.maxBookings && new Date(slot.dateTime) > new Date();
-                        return (
-                          <div key={slot.id} className="flex items-center justify-between text-sm">
-                            <div className="flex items-center text-gray-700">
-                              <Clock className="h-4 w-4 mr-2" />
-                              <span>{formatted.short}</span>
+                      {event.timeSlots
+                        .filter(slot => !isPastDateTime(slot.dateTime)) // Only show future slots
+                        .slice(0, 2)
+                        .map((slot) => {
+                          const formatted = formatUtcInLocalTimezone(slot.dateTime);
+                          const isAvailable = slot.currentBookings < slot.maxBookings;
+                          return (
+                            <div key={slot.id} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center text-gray-700">
+                                <Clock className="h-4 w-4 mr-2" />
+                                <span>{formatted.short}</span>
+                              </div>
+                              <Badge variant={isAvailable ? "default" : "destructive"} className="text-xs">
+                                {isAvailable ? "Available" : "Full"}
+                              </Badge>
                             </div>
-                            <Badge variant={isAvailable ? "default" : "destructive"} className="text-xs">
-                              {isAvailable ? "Available" : "Full"}
-                            </Badge>
-                          </div>
-                        );
-                      })}
-                      {event.timeSlots.length > 2 && (
+                          );
+                        })}
+                      {event.timeSlots.filter(slot => !isPastDateTime(slot.dateTime)).length > 2 && (
                         <p className="text-sm text-gray-500">
-                          +{event.timeSlots.length - 2} more time slots
+                          +{event.timeSlots.filter(slot => !isPastDateTime(slot.dateTime)).length - 2} more time slots
                         </p>
                       )}
                     </div>

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { formatDateTime, getUserTimezone } from "@/utils/timeUtils";
+import { formatUtcInLocalTimezone, getUserTimezone, isPastDateTime } from "@/utils/timeUtils";
+
 import TimezoneIndicator from "@/components/TimezoneIndicator";
 
 interface TimeSlot {
@@ -67,24 +68,6 @@ const EventDetails = () => {
     };
     fetchEvent();
   }, [id]);
-
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return {
-      full: date.toLocaleDateString('en-US', { 
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long', 
-        day: 'numeric'
-      }),
-      time: date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      }),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-    };
-  };
 
   const handleSlotSelect = (slotId: string) => {
     setSelectedSlot(slotId);
@@ -178,6 +161,8 @@ const EventDetails = () => {
     );
   }
 
+  if (!event) return null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -199,7 +184,7 @@ const EventDetails = () => {
               <div className="flex items-center text-gray-500">
                 <Calendar className="h-4 w-4 mr-1" />
                 <span className="text-sm">
-                  Created {new Date(event.createdAt).toLocaleDateString()}
+                  Created {formatUtcInLocalTimezone(event.createdAt).date}
                 </span>
               </div>
             </div>
@@ -222,9 +207,11 @@ const EventDetails = () => {
           <CardContent>
             <div className="grid gap-4">
               {event.timeSlots.map((slot) => {
-                const formatted = formatDateTime(slot.dateTime);
+                const formatted = formatUtcInLocalTimezone(slot.dateTime);
                 const isAvailable = slot.currentBookings < slot.maxBookings;
+                const isPast = isPastDateTime(slot.dateTime);
                 const isSelected = selectedSlot === slot.id;
+                const canSelect = isAvailable && !isPast;
                 
                 return (
                   <div
@@ -232,11 +219,11 @@ const EventDetails = () => {
                     className={`border rounded-lg p-4 cursor-pointer transition-all ${
                       isSelected 
                         ? 'border-blue-500 bg-blue-50' 
-                        : isAvailable 
+                        : canSelect 
                           ? 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50' 
                           : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                     }`}
-                    onClick={() => isAvailable && handleSlotSelect(slot.id)}
+                    onClick={() => canSelect && handleSlotSelect(slot.id)}
                   >
                     <div className="flex justify-between items-center">
                       <div>
@@ -247,13 +234,24 @@ const EventDetails = () => {
                         <div className="text-lg font-bold text-blue-600 mb-1">
                           {formatted.time}
                         </div>
+                        {isPast && (
+                          <div className="text-sm text-red-500 font-medium">
+                            Past Event
+                          </div>
+                        )}
                       </div>
                       <div className="text-right">
                         <Badge 
-                          variant={isAvailable ? "default" : "destructive"}
+                          variant={
+                            isPast 
+                              ? "outline" 
+                              : isAvailable 
+                                ? "default" 
+                                : "destructive"
+                          }
                           className="mb-2"
                         >
-                          {isAvailable ? "Available" : "Full"}
+                          {isPast ? "Past" : isAvailable ? "Available" : "Full"}
                         </Badge>
                         <div className="flex items-center text-sm text-gray-500">
                           <Users className="h-4 w-4 mr-1" />
