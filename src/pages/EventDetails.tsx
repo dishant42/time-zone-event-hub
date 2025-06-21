@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Calendar, Clock, Users, CheckCircle, AlertCircle } from "lucide-react";
@@ -35,75 +34,38 @@ const EventDetails = () => {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [bookingForm, setBookingForm] = useState({ name: "", email: "" });
   const [isBooking, setIsBooking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Mock API call
-    setTimeout(() => {
-      if (id === "1") {
+    const fetchEvent = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`http://localhost:3000/api/events/${id}`);
+        if (!response.ok) throw new Error("Event not found");
+        const data = await response.json();
+        // Map backend slots to frontend timeSlots
         setEvent({
-          id: "1",
-          title: "Premium Networking Brunch",
-          description: "Join us for a curated networking brunch with industry leaders. Enjoy gourmet bites, insightful conversations, and exclusive connections. Limited seats available. Dress code: business casual.",
-          createdBy: "Event Manager",
-          timeSlots: [
-            { 
-              id: "1", 
-              dateTime: "2025-06-21T09:00:00Z", 
-              maxBookings: 8, 
-              currentBookings: 6,
-              bookings: []
-            },
-            { 
-              id: "2", 
-              dateTime: "2025-06-21T11:00:00Z", 
-              maxBookings: 8, 
-              currentBookings: 8,
-              bookings: []
-            },
-            { 
-              id: "3", 
-              dateTime: "2025-06-21T14:00:00Z", 
-              maxBookings: 8, 
-              currentBookings: 2,
-              bookings: []
-            },
-            { 
-              id: "4", 
-              dateTime: "2025-06-22T10:00:00Z", 
-              maxBookings: 8, 
-              currentBookings: 0,
-              bookings: []
-            }
-          ],
-          createdAt: "2025-06-20T08:00:00Z"
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          createdBy: data.createdBy || "Unknown",
+          timeSlots: (data.slots || []).map((slot: any) => ({
+            id: slot.id,
+            dateTime: slot.dateTime,
+            maxBookings: slot.maxBookings,
+            currentBookings: slot.currentBookings,
+            bookings: slot.bookings || [],
+          })),
+          createdAt: data.createdAt,
         });
-      } else if (id === "2") {
-        setEvent({
-          id: "2",
-          title: "Tech Workshop: React Advanced Patterns",
-          description: "Deep dive into advanced React patterns including custom hooks, context optimization, and performance techniques. Perfect for intermediate to advanced developers.",
-          createdBy: "TechCorp Training",
-          timeSlots: [
-            { 
-              id: "5", 
-              dateTime: "2025-06-23T13:00:00Z", 
-              maxBookings: 12, 
-              currentBookings: 8,
-              bookings: []
-            },
-            { 
-              id: "6", 
-              dateTime: "2025-06-24T13:00:00Z", 
-              maxBookings: 12, 
-              currentBookings: 4,
-              bookings: []
-            }
-          ],
-          createdAt: "2025-06-19T10:00:00Z"
-        });
+      } catch (err: any) {
+        setError(err.message || "Error fetching event");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, 800);
+    };
+    fetchEvent();
   }, [id]);
 
   const formatDateTime = (dateTime: string) => {
@@ -130,66 +92,64 @@ const EventDetails = () => {
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!selectedSlot || !event) return;
-    
-    // Validation
     if (!bookingForm.name.trim() || !bookingForm.email.trim()) {
       toast.error("Please fill in all required fields");
       return;
     }
-    
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(bookingForm.email)) {
       toast.error("Please enter a valid email address");
       return;
     }
-
     const slot = event.timeSlots.find(s => s.id === selectedSlot);
     if (!slot) return;
-
     if (slot.currentBookings >= slot.maxBookings) {
       toast.error("This time slot is now full");
       return;
     }
-
     // Check for duplicate booking
     const existingBooking = slot.bookings.find(b => b.email === bookingForm.email);
     if (existingBooking) {
       toast.error("You have already booked this time slot");
       return;
     }
-
     setIsBooking(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      // Update the event state
-      setEvent(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          timeSlots: prev.timeSlots.map(s => 
-            s.id === selectedSlot 
-              ? {
-                  ...s,
-                  currentBookings: s.currentBookings + 1,
-                  bookings: [...s.bookings, {
-                    name: bookingForm.name,
-                    email: bookingForm.email,
-                    bookedAt: new Date().toISOString()
-                  }]
-                }
-              : s
-          )
-        };
+    try {
+      const response = await fetch("http://localhost:3000/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: event.id,
+          slotId: selectedSlot,
+          name: bookingForm.name,
+          email: bookingForm.email
+        })
       });
-
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Booking failed");
+      }
       toast.success("Booking confirmed! Check your email for details.");
       setSelectedSlot(null);
       setBookingForm({ name: "", email: "" });
+      // Refresh event data to update bookings
+      const updatedEvent = await response.json();
+      setEvent(prev => prev ? {
+        ...prev,
+        timeSlots: (updatedEvent.slots || []).map((slot: any) => ({
+          id: slot.id,
+          dateTime: slot.dateTime,
+          maxBookings: slot.maxBookings,
+          currentBookings: slot.currentBookings,
+          bookings: slot.bookings || [],
+        }))
+      } : prev);
+    } catch (err: any) {
+      toast.error(err.message || "Error booking slot");
+    } finally {
       setIsBooking(false);
-    }, 1500);
+    }
   };
 
   if (loading) {
@@ -203,13 +163,13 @@ const EventDetails = () => {
     );
   }
 
-  if (!event) {
+  if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">Event Not Found</h2>
-          <p className="text-gray-600 mb-6">The event you're looking for doesn't exist.</p>
+          <p className="text-gray-600 mb-6">{error}</p>
           <Link to="/">
             <Button>Back to Events</Button>
           </Link>
@@ -254,10 +214,10 @@ const EventDetails = () => {
         <Card className="mb-8 border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">Available Time Slots</CardTitle>
-            <CardDescription className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-gray-600 text-sm font-normal">
               Times shown in your local timezone
               <TimezoneIndicator />
-            </CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4">

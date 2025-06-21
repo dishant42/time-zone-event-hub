@@ -109,34 +109,39 @@ const CreateEvent = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-
     setIsCreating(true);
 
     // Convert time slots to UTC format using utility
-    const formattedTimeSlots = timeSlots.map(slot => {
-      const utcDateTime = convertLocalInputsToUtc(slot.date, slot.time);
-      return {
-        id: slot.id,
-        dateTime: utcDateTime,
-        maxBookings: slot.maxBookings,
-        currentBookings: 0,
-        bookings: []
-      };
-    });
+    const formattedSlots = timeSlots.map(slot => ({
+      dateTime: convertLocalInputsToUtc(slot.date, slot.time),
+      maxBookings: slot.maxBookings,
+    }));
 
-    // Simulate API call
-    setTimeout(() => {
-      console.log("Creating event:", {
-        ...eventForm,
-        timeSlots: formattedTimeSlots
+    try {
+      const response = await fetch("http://localhost:3000/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: eventForm.title,
+          description: eventForm.description,
+          createdBy: eventForm.createdBy,
+          slots: formattedSlots
+        })
       });
-      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData); // <--- Add this line to see the error details
+
+        throw new Error(errorData.error || "Failed to create event");
+      }
       toast.success("Event created successfully!");
       setIsCreating(false);
       navigate("/");
-    }, 2000);
+    } catch (err: any) {
+      toast.error(err.message || "Error creating event");
+      setIsCreating(false);
+    }
   };
 
   return (

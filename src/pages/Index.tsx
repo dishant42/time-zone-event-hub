@@ -25,42 +25,46 @@ interface Event {
 const Index = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data for demonstration - in real app this would come from API
   useEffect(() => {
-    setTimeout(() => {
-      setEvents([
-        {
-          id: "1",
-          title: "Premium Networking Brunch",
-          description: "Join us for a curated networking brunch with industry leaders. Enjoy gourmet bites, insightful conversations, and exclusive connections. Limited seats available. Dress code: business casual.",
-          createdBy: "Event Manager",
-          timeSlots: [
-            { id: "1", dateTime: "2025-06-21T09:00:00Z", maxBookings: 8, currentBookings: 6 },
-            { id: "2", dateTime: "2025-06-21T11:00:00Z", maxBookings: 8, currentBookings: 8 },
-            { id: "3", dateTime: "2025-06-21T14:00:00Z", maxBookings: 8, currentBookings: 2 },
-            { id: "4", dateTime: "2025-06-22T10:00:00Z", maxBookings: 8, currentBookings: 0 }
-          ],
-          createdAt: "2025-06-20T08:00:00Z"
-        },
-        {
-          id: "2", 
-          title: "Tech Workshop: React Advanced Patterns",
-          description: "Deep dive into advanced React patterns including custom hooks, context optimization, and performance techniques. Perfect for intermediate to advanced developers.",
-          createdBy: "TechCorp Training",
-          timeSlots: [
-            { id: "5", dateTime: "2025-06-23T13:00:00Z", maxBookings: 12, currentBookings: 8 },
-            { id: "6", dateTime: "2025-06-24T13:00:00Z", maxBookings: 12, currentBookings: 4 }
-          ],
-          createdAt: "2025-06-19T10:00:00Z"
-        }
-      ]);
-      setLoading(false);
-    }, 1000);
+    const fetchEvents = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("http://localhost:3000/api/events");
+        if (!response.ok) throw new Error("Failed to fetch events");
+        const data = await response.json();
+        // Map backend slot field to frontend timeSlots
+        const mapped = data.map((event: any) => ({
+          id: event.id,
+          title: event.title,
+          description: event.description,
+          createdBy: event.createdBy, // fallback if missing
+          timeSlots: (event.slots || []).map((slot: any) => ({
+            id: slot.id,
+            dateTime: slot.dateTime,
+            maxBookings: slot.maxBookings,
+            currentBookings: slot.currentBookings,
+          })),
+          createdAt: event.createdAt,
+        }));
+        setEvents(mapped);
+      } catch (err: any) {
+        setError(err.message || "Error fetching events");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEvents();
   }, []);
 
   const getAvailableSlots = (timeSlots: TimeSlot[]) => {
-    return timeSlots.filter(slot => slot.currentBookings < slot.maxBookings).length;
+     const now = new Date();
+      return timeSlots.filter(slot =>
+        slot.currentBookings < slot.maxBookings &&
+        new Date(slot.dateTime) > now
+    ).length;
   };
 
   const getTotalSlots = (timeSlots: TimeSlot[]) => {
@@ -78,6 +82,15 @@ const Index = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -151,7 +164,7 @@ const Index = () => {
                     <div className="space-y-2 mb-4">
                       {event.timeSlots.slice(0, 2).map((slot) => {
                         const formatted = formatDateTime(slot.dateTime);
-                        const isAvailable = slot.currentBookings < slot.maxBookings;
+                        const isAvailable = slot.currentBookings < slot.maxBookings && new Date(slot.dateTime) > new Date();
                         return (
                           <div key={slot.id} className="flex items-center justify-between text-sm">
                             <div className="flex items-center text-gray-700">

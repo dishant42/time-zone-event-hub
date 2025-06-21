@@ -1,212 +1,378 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, Mail, Calendar, Clock, User, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { formatDateTime, isUpcomingDateTime } from "@/utils/timeUtils";
+import { ArrowLeft, Mail, Calendar, Clock, User, Search, TrendingUp, CheckCircle, XCircle, Clock3, BarChart3 } from "lucide-react";
 
-interface Booking {
-  name: string;
-  email: string;
-  bookedAt: string;
-}
-
-interface TimeSlot {
+interface SlotData {
   id: string;
   dateTime: string;
   maxBookings: number;
   currentBookings: number;
-  bookings: Booking[];
 }
 
-interface Event {
+interface EventData {
   id: string;
   title: string;
   description: string;
-  createdBy: string;
-  timeSlots: TimeSlot[];
-  createdAt: string;
+}
+
+interface BackendBooking {
+  id: string;
+  userId: string;
+  slotId: string;
+  eventId: string;
+  status: 'CONFIRMED' | 'CANCELLED' | 'WAITLISTED';
+  bookedAt: string;
+  slot: SlotData;
+  event: EventData;
+  isPastEvent: boolean;
+  availableSpots: number;
+  slotStatus: 'FULL' | 'AVAILABLE';
+}
+
+interface UserStatistics {
+  total: number;
+  byStatus: {
+    confirmed: number;
+    cancelled: number;
+    waitlisted: number;
+  };
+  byTime: {
+    upcoming: number;
+    past: number;
+  };
+  memberSince: string;
+}
+
+interface BackendResponse {
+  success: boolean;
+  data: {
+    user: {
+      id: string;
+      email: string;
+      name: string;
+    };
+    bookings: BackendBooking[];
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    };
+  };
+}
+
+interface StatsResponse {
+  success: boolean;
+  data: {
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      createdAt: string;
+    };
+    statistics: UserStatistics;
+  };
 }
 
 interface UserBooking {
+  id: string;
   eventId: string;
   eventTitle: string;
   eventDescription: string;
   slotDateTime: string;
   bookedAt: string;
-  name: string;
+  status: 'CONFIRMED' | 'CANCELLED' | 'WAITLISTED';
+  isPastEvent: boolean;
+  availableSpots: number;
+  slotStatus: 'FULL' | 'AVAILABLE';
 }
+
+const formatDateTime = (dateTime: string) => {
+  const date = new Date(dateTime);
+  return {
+    full: date.toLocaleDateString(),
+    time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
+};
 
 const MyBookings = () => {
   const [email, setEmail] = useState("");
   const [userBookings, setUserBookings] = useState<UserBooking[]>([]);
+  const [userName, setUserName] = useState<string>("");
+  const [userId, setUserId] = useState<string>("");
+  const [userStats, setUserStats] = useState<UserStatistics | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock events data - in real app this would come from API/context
-  const mockEvents: Event[] = [
-    {
-      id: "1",
-      title: "Premium Networking Brunch",
-      description: "Join us for a curated networking brunch with industry leaders.",
-      createdBy: "Event Manager",
-      timeSlots: [
-        { 
-          id: "1", 
-          dateTime: "2025-06-21T09:00:00Z", 
-          maxBookings: 8, 
-          currentBookings: 6,
-          bookings: [
-            { name: "John Smith", email: "john@example.com", bookedAt: "2025-06-20T10:00:00Z" },
-            { name: "Sarah Johnson", email: "sarah@example.com", bookedAt: "2025-06-20T11:00:00Z" }
-          ]
-        },
-        { 
-          id: "3", 
-          dateTime: "2025-06-21T14:00:00Z", 
-          maxBookings: 8, 
-          currentBookings: 2,
-          bookings: [
-            { name: "Mike Wilson", email: "mike@example.com", bookedAt: "2025-06-20T12:00:00Z" }
-          ]
-        }
-      ],
-      createdAt: "2025-06-20T08:00:00Z"
-    },
-    {
-      id: "2",
-      title: "Tech Workshop: React Advanced Patterns",
-      description: "Deep dive into advanced React patterns including custom hooks.",
-      createdBy: "TechCorp Training",
-      timeSlots: [
-        { 
-          id: "5", 
-          dateTime: "2025-06-23T13:00:00Z", 
-          maxBookings: 12, 
-          currentBookings: 8,
-          bookings: [
-            { name: "John Smith", email: "john@example.com", bookedAt: "2025-06-20T13:00:00Z" },
-            { name: "Alex Chen", email: "alex@example.com", bookedAt: "2025-06-20T14:00:00Z" }
-          ]
-        }
-      ],
-      createdAt: "2025-06-19T10:00:00Z"
+  const fetchUserStats = async (userId: string) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/users/${userId}/stats`);
+      if (response.ok) {
+        const data: StatsResponse = await response.json();
+        setUserStats(data.data.statistics);
+      }
+    } catch (err) {
+      console.error('Error fetching user stats:', err);
     }
-  ];
-
-  const formatDateTime = (dateTime: string) => {
-    const date = new Date(dateTime);
-    return {
-      full: date.toLocaleDateString('en-US', { 
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long', 
-        day: 'numeric'
-      }),
-      time: date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      }),
-      date: date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric'
-      })
-    };
   };
 
-  const searchBookings = (e: React.FormEvent) => {
+  const searchBookings = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!email.trim()) return;
-    
     setIsSearching(true);
     setHasSearched(false);
-
-    // Simulate API call
-    setTimeout(() => {
-      const bookings: UserBooking[] = [];
+    setError(null);
+    try {
+      // Updated API endpoint to match backend
+      const response = await fetch(`http://localhost:3000/api/users/email/${encodeURIComponent(email)}/bookings`);
       
-      mockEvents.forEach(event => {
-        event.timeSlots.forEach(slot => {
-          const userBooking = slot.bookings.find(booking => 
-            booking.email.toLowerCase() === email.toLowerCase()
-          );
-          
-          if (userBooking) {
-            bookings.push({
-              eventId: event.id,
-              eventTitle: event.title,
-              eventDescription: event.description,
-              slotDateTime: slot.dateTime,
-              bookedAt: userBooking.bookedAt,
-              name: userBooking.name
-            });
-          }
-        });
-      });
-
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("No user found with this email address");
+        }
+        throw new Error("Error fetching bookings");
+      }
+      
+      const data: BackendResponse = await response.json();
+      
+      // Map backend response to frontend format
+      const bookings: UserBooking[] = data.data.bookings.map((booking: BackendBooking) => ({
+        id: booking.id,
+        eventId: booking.eventId,
+        eventTitle: booking.event.title,
+        eventDescription: booking.event.description,
+        slotDateTime: booking.slot.dateTime,
+        bookedAt: booking.bookedAt,
+        status: booking.status,
+        isPastEvent: booking.isPastEvent,
+        availableSpots: booking.availableSpots,
+        slotStatus: booking.slotStatus
+      }));
+      
       setUserBookings(bookings);
+      setUserName(data.data.user.name || email);
+      setUserId(data.data.user.id);
+      
+      // Fetch user statistics
+      await fetchUserStats(data.data.user.id);
+      
+    } catch (err: any) {
+      setUserBookings([]);
+      setUserName("");
+      setUserId("");
+      setUserStats(null);
+      setError(err.message || "Error fetching bookings");
+    } finally {
       setIsSearching(false);
       setHasSearched(true);
-    }, 800);
+    }
   };
 
   const isUpcomingDateTime = (dateTime: string) => {
     return new Date(dateTime) > new Date();
   };
 
-  const upcomingBookings = userBookings.filter(booking => isUpcomingDateTime(booking.slotDateTime));
-  const pastBookings = userBookings.filter(booking => !isUpcomingDateTime(booking.slotDateTime));
+  // Filter bookings by status and time
+  const confirmedBookings = userBookings.filter(booking => booking.status === 'CONFIRMED');
+  const upcomingBookings = confirmedBookings.filter(booking => isUpcomingDateTime(booking.slotDateTime));
+  const pastBookings = confirmedBookings.filter(booking => !isUpcomingDateTime(booking.slotDateTime));
+  const cancelledBookings = userBookings.filter(booking => booking.status === 'CANCELLED');
+  const waitlistedBookings = userBookings.filter(booking => booking.status === 'WAITLISTED');
+
+  const getStatusBadge = (status: string, isPast: boolean = false) => {
+    const baseClasses = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium";
+    
+    switch (status) {
+      case 'CONFIRMED':
+        return isPast ? (
+          <span className={`${baseClasses} bg-gray-100 text-gray-800`}>Past Event</span>
+        ) : (
+          <span className={`${baseClasses} bg-green-100 text-green-800`}>Confirmed</span>
+        );
+      case 'CANCELLED':
+        return <span className={`${baseClasses} bg-red-100 text-red-800`}>Cancelled</span>;
+      case 'WAITLISTED':
+        return <span className={`${baseClasses} bg-yellow-100 text-yellow-800 border border-yellow-500`}>Waitlisted</span>;
+      default:
+        return <span className={`${baseClasses} bg-gray-100 text-gray-800`}>{status}</span>;
+    }
+  };
+
+  const renderStatsCard = () => {
+    if (!userStats) return null;
+
+    const memberSince = new Date(userStats.memberSince).toLocaleDateString();
+    const statsCards = [
+      {
+        title: "Total Bookings",
+        value: userStats.total,
+        icon: BarChart3,
+        color: "text-blue-600",
+        bgColor: "bg-blue-50"
+      },
+      {
+        title: "Confirmed",
+        value: userStats.byStatus.confirmed,
+        icon: CheckCircle,
+        color: "text-green-600",
+        bgColor: "bg-green-50"
+      },
+      {
+        title: "Upcoming",
+        value: userStats.byTime.upcoming,
+        icon: Calendar,
+        color: "text-purple-600",
+        bgColor: "bg-purple-50"
+      },
+      {
+        title: "Past Events",
+        value: userStats.byTime.past,
+        icon: Clock,
+        color: "text-gray-600",
+        bgColor: "bg-gray-50"
+      },
+      {
+        title: "Waitlisted",
+        value: userStats.byStatus.waitlisted,
+        icon: Clock3,
+        color: "text-yellow-600",
+        bgColor: "bg-yellow-50"
+      },
+      {
+        title: "Cancelled",
+        value: userStats.byStatus.cancelled,
+        icon: XCircle,
+        color: "text-red-600",
+        bgColor: "bg-red-50"
+      }
+    ];
+
+    return (
+      <div className="mb-8 bg-white rounded-lg shadow-lg border-0 overflow-hidden">
+        <div className="p-6 border-b border-gray-200">
+          <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+            <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
+            Your Booking Statistics
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Member since {memberSince}
+          </p>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {statsCards.map((stat, index) => {
+              const IconComponent = stat.icon;
+              return (
+                <div key={index} className={`${stat.bgColor} rounded-lg p-4 text-center`}>
+                  <IconComponent className={`h-6 w-6 ${stat.color} mx-auto mb-2`} />
+                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+                  <div className="text-sm text-gray-600">{stat.title}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBookingCard = (booking: UserBooking, index: number, isPast: boolean = false) => {
+    const formatted = formatDateTime(booking.slotDateTime);
+    const borderColor = isPast ? 'border-l-gray-400' : 
+                       booking.status === 'CONFIRMED' ? 'border-l-green-500' :
+                       booking.status === 'CANCELLED' ? 'border-l-red-500' : 'border-l-yellow-500';
+    
+    return (
+      <div key={`${booking.id}-${index}`} className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 border-l-4 ${borderColor} overflow-hidden`}>
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-4">
+            {getStatusBadge(booking.status, isPast)}
+            <div className="text-sm text-gray-500">
+              Booked {new Date(booking.bookedAt).toLocaleDateString()}
+            </div>
+          </div>
+          <h4 className={`text-lg font-semibold mb-2 ${isPast ? 'text-gray-700' : 'text-gray-900'}`}>
+            {booking.eventTitle}
+          </h4>
+          {booking.eventDescription && (
+            <p className="text-sm text-gray-600 mb-4">
+              {booking.eventDescription}
+            </p>
+          )}
+          
+          <div className="space-y-3">
+            <div className={`flex items-center ${isPast ? 'text-gray-600' : 'text-gray-700'}`}>
+              <Clock className="h-4 w-4 mr-2" />
+              <span>
+                <strong>{formatted.full}</strong> at <strong>{formatted.time}</strong>
+              </span>
+            </div>
+            <div className={`flex items-center ${isPast ? 'text-gray-600' : 'text-gray-700'}`}>
+              <User className="h-4 w-4 mr-2" />
+              <span>{isPast ? 'Attended as:' : 'Booked for:'} <strong>{userName}</strong></span>
+            </div>
+            {booking.status === 'CONFIRMED' && !isPast && (
+              <div className="flex items-center text-gray-600 text-sm">
+                <span>Available spots: {booking.availableSpots} | Status: {booking.slotStatus}</span>
+              </div>
+            )}
+            <button 
+              onClick={() => window.location.href = `/event/${booking.eventId}`}
+              className="w-full mt-3 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            >
+              View Event Details
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm border-b">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <Link to="/" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4">
+          <a href="/" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Events
-          </Link>
+          </a>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
-            <p className="text-gray-600">View your event booking history</p>
+            <p className="text-gray-600">View your event booking history and statistics</p>
           </div>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Search Form */}
-        <Card className="mb-8 border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl">Find Your Bookings</CardTitle>
-            <CardDescription>
+        <div className="mb-8 bg-white rounded-lg shadow-lg border-0 overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-900">Find Your Bookings</h3>
+            <p className="text-sm text-gray-600 mt-1">
               Enter the email address you used when booking events
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={searchBookings} className="space-y-4">
+            </p>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
               <div>
-                <Label htmlFor="email">Email Address</Label>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
                 <div className="flex gap-2 mt-1">
                   <div className="relative flex-1">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
+                    <input
                       id="email"
                       type="email"
                       placeholder="Enter your email address"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="bg-blue-600 hover:bg-blue-700"
+                  <button 
+                    onClick={searchBookings}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                     disabled={isSearching}
                   >
                     {isSearching ? (
@@ -220,19 +386,19 @@ const MyBookings = () => {
                         Search
                       </>
                     )}
-                  </Button>
+                  </button>
                 </div>
               </div>
-            </form>
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+        </div>
 
         {/* Results */}
         {hasSearched && (
           <>
-            {userBookings.length === 0 ? (
-              <Card className="border-0 shadow-lg">
-                <CardContent className="text-center py-16">
+            {userBookings.length === 0 && !error ? (
+              <div className="bg-white rounded-lg shadow-lg border-0 overflow-hidden">
+                <div className="text-center py-16 px-6">
                   <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                   <h2 className="text-2xl font-semibold text-gray-900 mb-2">No Bookings Found</h2>
                   <p className="text-gray-600 mb-6">
@@ -241,8 +407,19 @@ const MyBookings = () => {
                   <p className="text-gray-500 text-sm">
                     Make sure you entered the correct email address you used when booking.
                   </p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="bg-white rounded-lg shadow-lg border-0 overflow-hidden">
+                <div className="text-center py-16 px-6">
+                  <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h2 className="text-2xl font-semibold text-gray-900 mb-2">Error</h2>
+                  <p className="text-gray-600 mb-6">{error}</p>
+                  <p className="text-gray-500 text-sm">
+                    Make sure you entered the correct email address you used when booking.
+                  </p>
+                </div>
+              </div>
             ) : (
               <div className="space-y-8">
                 <div className="text-center">
@@ -252,7 +429,10 @@ const MyBookings = () => {
                   <p className="text-gray-600">Found for {email}</p>
                 </div>
 
-                {/* Upcoming Bookings */}
+                {/* Statistics Section */}
+                {renderStatsCard()}
+
+                {/* Upcoming Confirmed Bookings */}
                 {upcomingBookings.length > 0 && (
                   <div>
                     <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -260,46 +440,25 @@ const MyBookings = () => {
                       Upcoming Events ({upcomingBookings.length})
                     </h3>
                     <div className="grid gap-4">
-                      {upcomingBookings.map((booking, index) => {
-                        const formatted = formatDateTime(booking.slotDateTime);
-                        return (
-                          <Card key={index} className="hover:shadow-lg transition-shadow duration-300 border-0 shadow-md border-l-4 border-l-green-500">
-                            <CardHeader className="pb-3">
-                              <div className="flex justify-between items-start">
-                                <Badge variant="default" className="bg-green-100 text-green-800">
-                                  Upcoming
-                                </Badge>
-                                <div className="text-sm text-gray-500">
-                                  Booked {new Date(booking.bookedAt).toLocaleDateString()}
-                                </div>
-                              </div>
-                              <CardTitle className="text-lg">{booking.eventTitle}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-3">
-                                <div className="flex items-center text-gray-700">
-                                  <Clock className="h-4 w-4 mr-2" />
-                                  <span><strong>{formatted.full}</strong> at <strong>{formatted.time}</strong></span>
-                                </div>
-                                <div className="flex items-center text-gray-700">
-                                  <User className="h-4 w-4 mr-2" />
-                                  <span>Booked for: <strong>{booking.name}</strong></span>
-                                </div>
-                                <Link to={`/event/${booking.eventId}`}>
-                                  <Button variant="outline" className="w-full mt-3">
-                                    View Event Details
-                                  </Button>
-                                </Link>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+                      {upcomingBookings.map((booking, index) => renderBookingCard(booking, index, false))}
                     </div>
                   </div>
                 )}
 
-                {/* Past Bookings */}
+                {/* Waitlisted Bookings */}
+                {waitlistedBookings.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                      <Clock className="h-5 w-5 mr-2 text-yellow-600" />
+                      Waitlisted Events ({waitlistedBookings.length})
+                    </h3>
+                    <div className="grid gap-4">
+                      {waitlistedBookings.map((booking, index) => renderBookingCard(booking, index, false))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Past Confirmed Bookings */}
                 {pastBookings.length > 0 && (
                   <div>
                     <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -307,36 +466,20 @@ const MyBookings = () => {
                       Past Events ({pastBookings.length})
                     </h3>
                     <div className="grid gap-4">
-                      {pastBookings.map((booking, index) => {
-                        const formatted = formatDateTime(booking.slotDateTime);
-                        return (
-                          <Card key={index} className="hover:shadow-lg transition-shadow duration-300 border-0 shadow-md border-l-4 border-l-gray-400">
-                            <CardHeader className="pb-3">
-                              <div className="flex justify-between items-start">
-                                <Badge variant="secondary">
-                                  Past Event
-                                </Badge>
-                                <div className="text-sm text-gray-500">
-                                  Booked {new Date(booking.bookedAt).toLocaleDateString()}
-                                </div>
-                              </div>
-                              <CardTitle className="text-lg text-gray-700">{booking.eventTitle}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-3">
-                                <div className="flex items-center text-gray-600">
-                                  <Clock className="h-4 w-4 mr-2" />
-                                  <span>{formatted.full} at {formatted.time}</span>
-                                </div>
-                                <div className="flex items-center text-gray-600">
-                                  <User className="h-4 w-4 mr-2" />
-                                  <span>Attended as: {booking.name}</span>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+                      {pastBookings.map((booking, index) => renderBookingCard(booking, index, true))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cancelled Bookings */}
+                {cancelledBookings.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                      <Calendar className="h-5 w-5 mr-2 text-red-600" />
+                      Cancelled Events ({cancelledBookings.length})
+                    </h3>
+                    <div className="grid gap-4">
+                      {cancelledBookings.map((booking, index) => renderBookingCard(booking, index, false))}
                     </div>
                   </div>
                 )}
