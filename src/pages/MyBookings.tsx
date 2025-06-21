@@ -1,5 +1,12 @@
 import { useState } from "react";
 import { ArrowLeft, Mail, Calendar, Clock, User, Search, TrendingUp, CheckCircle, XCircle, Clock3, BarChart3 } from "lucide-react";
+import { 
+  formatUtcInLocalTimezone, 
+  isUpcomingDateTime, 
+  isPastDateTime,
+  getTimezoneAbbreviation,
+  getUserTimezone 
+} from "@/utils/timeUtils"; // Import your timezone utilities
 
 interface SlotData {
   id: string;
@@ -86,12 +93,29 @@ interface UserBooking {
   slotStatus: 'FULL' | 'AVAILABLE';
 }
 
-const formatDateTime = (dateTime: string) => {
-  const date = new Date(dateTime);
-  return {
-    full: date.toLocaleDateString(),
-    time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  };
+// Updated formatDateTime function using timezone utilities
+const formatDateTime = (utcDateTime: string) => {
+  try {
+    const formatted = formatUtcInLocalTimezone(utcDateTime);
+    return {
+      full: formatted.full,
+      date: formatted.date,
+      time: formatted.time,
+      short: formatted.short,
+      timezone: formatted.timezone
+    };
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    // Fallback to original method if timezone utils fail
+    const date = new Date(utcDateTime);
+    return {
+      full: date.toLocaleDateString(),
+      date: date.toLocaleDateString(),
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      short: `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      timezone: getUserTimezone()
+    };
+  }
 };
 
 const MyBookings = () => {
@@ -103,6 +127,7 @@ const MyBookings = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userTimezone] = useState(getUserTimezone());
 
   const fetchUserStats = async (userId: string) => {
     try {
@@ -141,10 +166,10 @@ const MyBookings = () => {
         eventId: booking.eventId,
         eventTitle: booking.event.title,
         eventDescription: booking.event.description,
-        slotDateTime: booking.slot.dateTime,
-        bookedAt: booking.bookedAt,
+        slotDateTime: booking.slot.dateTime, // This is UTC from backend
+        bookedAt: booking.bookedAt, // This is UTC from backend
         status: booking.status,
-        isPastEvent: booking.isPastEvent,
+        isPastEvent: isPastDateTime(booking.slot.dateTime), // Use timezone-aware function
         availableSpots: booking.availableSpots,
         slotStatus: booking.slotStatus
       }));
@@ -168,14 +193,15 @@ const MyBookings = () => {
     }
   };
 
-  const isUpcomingDateTime = (dateTime: string) => {
-    return new Date(dateTime) > new Date();
+  // Updated to use timezone-aware function
+  const isUpcomingDateTimeLocal = (utcDateTime: string) => {
+    return isUpcomingDateTime(utcDateTime);
   };
 
-  // Filter bookings by status and time
+  // Filter bookings by status and time using timezone-aware functions
   const confirmedBookings = userBookings.filter(booking => booking.status === 'CONFIRMED');
-  const upcomingBookings = confirmedBookings.filter(booking => isUpcomingDateTime(booking.slotDateTime));
-  const pastBookings = confirmedBookings.filter(booking => !isUpcomingDateTime(booking.slotDateTime));
+  const upcomingBookings = confirmedBookings.filter(booking => isUpcomingDateTimeLocal(booking.slotDateTime));
+  const pastBookings = confirmedBookings.filter(booking => !isUpcomingDateTimeLocal(booking.slotDateTime));
   const cancelledBookings = userBookings.filter(booking => booking.status === 'CANCELLED');
   const waitlistedBookings = userBookings.filter(booking => booking.status === 'WAITLISTED');
 
@@ -201,7 +227,8 @@ const MyBookings = () => {
   const renderStatsCard = () => {
     if (!userStats) return null;
 
-    const memberSince = new Date(userStats.memberSince).toLocaleDateString();
+    // Format member since date using timezone utilities
+    const memberSinceFormatted = formatUtcInLocalTimezone(userStats.memberSince);
     const statsCards = [
       {
         title: "Total Bookings",
@@ -255,7 +282,7 @@ const MyBookings = () => {
             Your Booking Statistics
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            Member since {memberSince}
+            Member since {memberSinceFormatted.full} ({getTimezoneAbbreviation()})
           </p>
         </div>
         <div className="p-6">
@@ -278,6 +305,8 @@ const MyBookings = () => {
 
   const renderBookingCard = (booking: UserBooking, index: number, isPast: boolean = false) => {
     const formatted = formatDateTime(booking.slotDateTime);
+    const bookedAtFormatted = formatDateTime(booking.bookedAt);
+    
     const borderColor = isPast ? 'border-l-gray-400' : 
                        booking.status === 'CONFIRMED' ? 'border-l-green-500' :
                        booking.status === 'CANCELLED' ? 'border-l-red-500' : 'border-l-yellow-500';
@@ -288,7 +317,7 @@ const MyBookings = () => {
           <div className="flex justify-between items-start mb-4">
             {getStatusBadge(booking.status, isPast)}
             <div className="text-sm text-gray-500">
-              Booked {new Date(booking.bookedAt).toLocaleDateString()}
+              Booked {bookedAtFormatted.date}
             </div>
           </div>
           <h4 className={`text-lg font-semibold mb-2 ${isPast ? 'text-gray-700' : 'text-gray-900'}`}>
@@ -306,6 +335,9 @@ const MyBookings = () => {
               <span>
                 <strong>{formatted.full}</strong> at <strong>{formatted.time}</strong>
               </span>
+            </div>
+            <div className={`flex items-center text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+              <span>📍 {getTimezoneAbbreviation()} timezone</span>
             </div>
             <div className={`flex items-center ${isPast ? 'text-gray-600' : 'text-gray-700'}`}>
               <User className="h-4 w-4 mr-2" />
@@ -339,7 +371,12 @@ const MyBookings = () => {
           </a>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
-            <p className="text-gray-600">View your event booking history and statistics</p>
+            <p className="text-gray-600">
+              View your event booking history and statistics 
+              <span className="text-sm text-gray-500 ml-2">
+                (Times shown in {getTimezoneAbbreviation()} timezone)
+              </span>
+            </p>
           </div>
         </div>
       </div>
