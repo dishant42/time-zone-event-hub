@@ -42,7 +42,7 @@ const EventDetails = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:3000/api/events/${id}`);
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/events/${id}`);
         if (!response.ok) throw new Error("Event not found");
         const data = await response.json();
         // Map backend slots to frontend timeSlots
@@ -99,7 +99,7 @@ const EventDetails = () => {
     }
     setIsBooking(true);
     try {
-      const response = await fetch("http://localhost:3000/api/bookings", {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

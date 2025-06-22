@@ -131,7 +131,7 @@ const MyBookings = () => {
 
   const fetchUserStats = async (userId: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/users/${userId}/bookings/stats`);
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/${userId}/bookings/stats`);
       if (response.ok) {
         const data: StatsResponse = await response.json();
         setUserStats(data.data.statistics);
@@ -149,7 +149,7 @@ const MyBookings = () => {
     setError(null);
     try {
       // Updated API endpoint to match backend
-      const response = await fetch(`http://localhost:3000/api/users/email/${encodeURIComponent(email)}/bookings`);
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/email/${encodeURIComponent(email)}/bookings`);
       
       if (!response.ok) {
         if (response.status === 404) {

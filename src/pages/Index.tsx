@@ -32,7 +32,7 @@ const Index = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch("http://localhost:3000/api/events");
+        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/events`);
         if (!response.ok) throw new Error("Failed to fetch events");
         const data = await response.json();
         // Map backend slot field to frontend timeSlots
